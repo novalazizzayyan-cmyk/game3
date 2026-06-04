@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tur Bus Haji & Umrah</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #fef08a; touch-action: none; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
+        #game-container { position: relative; width: 100vw; height: 100vh; background: linear-gradient(to bottom, #7dd3fc 0%, #e0f2fe 60%, #fde047 100%); }
+        canvas { display: block; width: 100%; height: 100%; }
+        
+        .ui-layer { position: absolute; inset: 0; display: flex; flex-direction: column; pointer-events: none; }
+        .interactive { pointer-events: auto; }
+        
+        /* Mobile Controls */
+        .controls { position: absolute; bottom: 30px; left: 0; right: 0; display: flex; justify-content: space-between; padding: 0 40px; pointer-events: none; }
+        .btn-pedal { width: 90px; height: 90px; background: rgba(255,255,255,0.8); border: 4px solid #334155; border-radius: 20px; font-size: 20px; font-weight: bold; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: auto; box-shadow: 0 8px 0 #475569; transition: transform 0.1s, box-shadow 0.1s; }
+        .btn-pedal:active { transform: translateY(8px); box-shadow: 0 0 0 #475569; background: #cbd5e1; }
+        
+        .progress-bar-container { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); width: 80%; max-width: 400px; height: 20px; background: rgba(0,0,0,0.2); border-radius: 10px; border: 2px solid white; }
+        .progress-bar { height: 100%; background: #22c55e; border-radius: 8px; width: 0%; transition: width 0.2s; }
+        .bus-icon { position: absolute; top: -10px; margin-left: -15px; font-size: 24px; transition: left 0.2s; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+    
+    <!-- UI Overlay -->
+    <div class="ui-layer">
+        
+        <!-- Top HUD -->
+        <div class="flex justify-between items-start p-4 w-full max-w-4xl mx-auto">
+            <div class="bg-white/90 px-4 py-2 rounded-xl shadow-md border-2 border-yellow-500 font-bold text-gray-800 interactive">
+                💧 Koin Zamzam: <span id="scoreVal" class="text-blue-600">0</span>
+            </div>
+            
+            <div class="progress-bar-container interactive">
+                <div class="progress-bar" id="progressBar"></div>
+                <div class="bus-icon" id="progressBus" style="left: 0%;">🚌</div>
+                <div class="absolute -top-6 -left-4 text-sm font-bold text-gray-700">Makkah</div>
+                <div class="absolute -top-6 -right-6 text-sm font-bold text-gray-700">Madinah</div>
+            </div>
+        </div>
+
+        <!-- Start Screen -->
+        <div id="startScreen" class="interactive absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col justify-center items-center p-6 text-center z-50">
+            <div class="text-7xl mb-4">🚌🐫🏜️</div>
+            <h1 class="text-4xl font-bold text-yellow-400 mb-2 drop-shadow-lg">Tur Bus Bersejarah</h1>
+            <p class="text-white mb-6 text-lg max-w-md">Kendarai Bus Jamaah Haji melewati bukit pasir! Kumpulkan Air Zamzam dan jawab kuis di setiap tempat bersejarah.</p>
+            <div class="bg-white/20 p-4 rounded-xl text-white text-sm mb-6 max-w-sm">
+                <strong>Cara Mengemudi:</strong><br>
+                Tahan tombol <b>GAS</b> untuk maju.<br>
+                Gunakan <b>REM</b> jika terlalu cepat!
+            </div>
+            <button onclick="startGame()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-10 rounded-full text-xl shadow-xl border-4 border-white transition transform hover:scale-105">Mulai Perjalanan</button>
+        </div>
+
+        <!-- Quiz Modal -->
+        <div id="quizScreen" class="interactive absolute inset-0 bg-black/80 flex flex-col justify-center items-center p-4 text-center z-50 hidden">
+            <div class="bg-white p-6 rounded-2xl w-full max-w-md shadow-2xl border-4 border-yellow-500">
+                <div class="text-5xl mb-2" id="quizIcon">📍</div>
+                <h2 class="text-2xl font-bold text-green-700 mb-2" id="checkpointName">Nama Tempat</h2>
+                <p class="text-gray-700 font-medium mb-6" id="quizQuestion">Pertanyaan muncul di sini...</p>
+                <div class="flex flex-col gap-3" id="quizOptions">
+                    <!-- Buttons injected via JS -->
+                </div>
+                <div id="quizFeedback" class="mt-4 font-bold text-xl hidden"></div>
+            </div>
+        </div>
+
+        <!-- Win Screen -->
+        <div id="winScreen" class="interactive absolute inset-0 bg-green-900/90 backdrop-blur-md flex flex-col justify-center items-center p-6 text-center z-50 hidden">
+            <div class="text-7xl mb-4">🕌</div>
+            <h2 class="text-4xl font-bold text-yellow-300 mb-2">Alhamdulillah!</h2>
+            <p class="text-white text-xl mb-6">Jamaah telah tiba di Madinah dengan selamat.</p>
+            <div class="bg-white/10 p-4 rounded-xl mb-6 border border-white/30">
+                <p class="text-yellow-100 text-lg">Total Zamzam & Pengetahuan:</p>
+                <p class="text-5xl font-bold text-white" id="finalScore">0</p>
+            </div>
+            <button onclick="location.reload()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-8 rounded-full text-lg shadow-lg border-2 border-white transition">Main Lagi</button>
+        </div>
+    </div>
+
+    <!-- Pedals -->
+    <div class="controls" id="mobileControls">
+        <div class="btn-pedal bg-red-100" id="btnBrake">
+            <span class="text-3xl">🛑</span>
+            <span class="text-sm">REM</span>
+        </div>
+        <div class="btn-pedal bg-green-100" id="btnGas">
+            <span class="text-3xl">⏩</span>
+            <span class="text-sm">GAS</span>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // UI Elements
+    const startScreen = document.getElementById('startScreen');
+    const quizScreen = document.getElementById('quizScreen');
+    const winScreen = document.getElementById('winScreen');
+    const scoreVal = document.getElementById('scoreVal');
+    const progressBar = document.getElementById('progressBar');
+    const progressBus = document.getElementById('progressBus');
+    const finalScore = document.getElementById('finalScore');
+    
+    // Responsive Canvas
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Game State
+    let gameState = 'START'; // START, PLAY, QUIZ, WIN
+    let score = 0;
+    let distanceTraveled = 0;
+    const totalDistance = 10000; // Total length of the track
+    
+    // Inputs
+    const keys = { gas: false, brake: false };
+    
+    // Keyboard Support
+    window.addEventListener('keydown', (e) => {
+        if(e.code === 'ArrowRight' || e.code === 'KeyD') keys.gas = true;
+        if(e.code === 'ArrowLeft' || e.code === 'KeyA') keys.brake = true;
+    });
+    window.addEventListener('keyup', (e) => {
+        if(e.code === 'ArrowRight' || e.code === 'KeyD') keys.gas = false;
+        if(e.code === 'ArrowLeft' || e.code === 'KeyA') keys.brake = false;
+    });
+
+    // Touch Support
+    const addTouch = (id, key) => {
+        const el = document.getElementById(id);
+        el.addEventListener('touchstart', (e) => { e.preventDefault(); keys[key] = true; });
+        el.addEventListener('touchend', (e) => { e.preventDefault(); keys[key] = false; });
+        el.addEventListener('mousedown', (e) => { e.preventDefault(); keys[key] = true; });
+        el.addEventListener('mouseup', (e) => { e.preventDefault(); keys[key] = false; });
+        el.addEventListener('mouseleave', (e) => { e.preventDefault(); keys[key] = false; });
+    };
+    addTouch('btnGas', 'gas');
+    addTouch('btnBrake', 'brake');
+
+    // Historical Checkpoints Data
+    const checkpoints = [
+        { d: 1500, name: "Jabal Nur", icon: "⛰️", q: "Gua Hira terletak di Jabal Nur. Peristiwa besar apa yang terjadi di sana?", a: "Nabi menerima wahyu pertama", b: "Nabi bersembunyi saat hijrah", correct: "A", passed: false },
+        { d: 3500, name: "Padang Arafah", icon: "⛺", q: "Bukit tempat bertemunya Nabi Adam dan Siti Hawa setelah diturunkan ke bumi yang terletak di Arafah adalah...", a: "Jabal Uhud", b: "Jabal Rahmah", correct: "B", passed: false },
+        { d: 5500, name: "Muzdalifah", icon: "🌑", q: "Apa yang biasa dilakukan jamaah haji saat Mabit (bermalam) di Muzdalifah?", a: "Mengambil batu kerikil", b: "Menyembelih hewan qurban", correct: "A", passed: false },
+        { d: 7500, name: "Mina", icon: "🎯", q: "Di Mina, jamaah melempar kerikil ke tiga tiang yang melambangkan syaitan. Kegiatan ini disebut...", a: "Lempar Jumrah", b: "Sa'i", correct: "A", passed: false },
+        { d: 9500, name: "Masjid Nabawi", icon: "🕌", q: "Area antara rumah (makam) Nabi dan mimbar di Masjid Nabawi yang sangat mustajab untuk berdoa disebut...", a: "Raudhah", b: "Hijir Ismail", correct: "A", passed: false }
+    ];
+
+    // Collectibles (Zamzam)
+    let coins = [];
+    for(let i=500; i<totalDistance; i+=400) {
+        // Skip coins near checkpoints
+        let nearCP = checkpoints.some(cp => Math.abs(cp.d - i) < 300);
+        if(!nearCP) {
+            coins.push({ d: i, yOffset: Math.random() * 50 + 20, collected: false });
+        }
+    }
+
+    // Bus Physics & Properties
+    const bus = {
+        x: canvas.width * 0.2, // Fix x position on screen
+        y: 0,
+        speed: 0,
+        maxSpeed: 12,
+        acceleration: 0.15,
+        friction: 0.05,
+        brakePower: 0.3,
+        width: 100,
+        height: 50,
+        angle: 0
+    };
+
+    // Terrain Generation (Math.sin wave)
+    function getRoadY(x) {
+        const baseHeight = canvas.height * 0.7;
+        // Combine multiple sine waves for natural-looking hills
+        const hill1 = Math.sin(x / 400) * 50;
+        const hill2 = Math.sin(x / 150) * 15;
+        return baseHeight + hill1 + hill2;
+    }
+
+    // Quiz Logic
+    let currentQuiz = null;
+
+    function triggerQuiz(cp) {
+        gameState = 'QUIZ';
+        keys.gas = keys.brake = false;
+        bus.speed = 0; // Stop bus immediately
+        currentQuiz = cp;
+        
+        document.getElementById('checkpointName').innerText = cp.name;
+        document.getElementById('quizIcon').innerText = cp.icon;
+        document.getElementById('quizQuestion').innerText = cp.q;
+        
+        const opts = document.getElementById('quizOptions');
+        const feedback = document.getElementById('quizFeedback');
+        
+        // Randomize
+        let isAFirst = Math.random() > 0.5;
+        let btn1Text = isAFirst ? cp.a : cp.b;
+        let btn1Val = isAFirst ? 'A' : 'B';
+        let btn2Text = isAFirst ? cp.b : cp.a;
+        let btn2Val = isAFirst ? 'B' : 'A';
+
+        opts.innerHTML = `
+            <button onclick="answerQuiz('${btn1Val}')" class="bg-yellow-100 hover:bg-yellow-200 text-yellow-900 font-bold py-3 px-4 rounded-xl border-2 border-yellow-400 text-lg transition">${btn1Text}</button>
+            <button onclick="answerQuiz('${btn2Val}')" class="bg-yellow-100 hover:bg-yellow-200 text-yellow-900 font-bold py-3 px-4 rounded-xl border-2 border-yellow-400 text-lg transition">${btn2Text}</button>
+        `;
+        
+        feedback.classList.add('hidden');
+        quizScreen.classList.remove('hidden');
+    }
+
+    window.answerQuiz = function(selected) {
+        const opts = document.getElementById('quizOptions');
+        const feedback = document.getElementById('quizFeedback');
+        
+        opts.innerHTML = ''; 
+        feedback.classList.remove('hidden');
+
+        if (selected === currentQuiz.correct) {
+            feedback.innerText = "✅ Tepat Sekali! (+50 Poin)";
+            feedback.className = "mt-4 font-bold text-2xl text-green-600";
+            score += 50;
+            scoreVal.innerText = score;
+        } else {
+            feedback.innerText = "❌ Kurang Tepat. Ayo belajar lagi.";
+            feedback.className = "mt-4 font-bold text-xl text-red-600";
+        }
+
+        setTimeout(() => {
+            quizScreen.classList.add('hidden');
+            gameState = 'PLAY';
+            bus.speed = 4; // Give a little boost after quiz
+        }, 2000);
+    }
+
+    // Main Game Update
+    function update() {
+        if (gameState !== 'PLAY') return;
+
+        // Physics: Acceleration
+        if (keys.gas) {
+            bus.speed += bus.acceleration;
+            if (bus.speed > bus.maxSpeed) bus.speed = bus.maxSpeed;
+        } else if (keys.brake) {
+            bus.speed -= bus.brakePower;
+            // Allow very slow reverse
+            if (bus.speed < -3) bus.speed = -3; 
+        } else {
+            // Friction
+            if (bus.speed > 0) bus.speed -= bus.friction;
+            if (bus.speed < 0) bus.speed += bus.friction;
+            if (Math.abs(bus.speed) < 0.1) bus.speed = 0;
+        }
+
+        distanceTraveled += bus.speed;
+        
+        // Prevent going backward past start
+        if (distanceTraveled < 0) {
+            distanceTraveled = 0;
+            bus.speed = 0;
+        }
+
+        // Win Condition
+        if (distanceTraveled >= totalDistance) {
+            gameState = 'WIN';
+            finalScore.innerText = score;
+            document.getElementById('mobileControls').style.display = 'none';
+            winScreen.classList.remove('hidden');
+            return;
+        }
+
+        // Update UI Progress
+        let progressPercent = (distanceTraveled / totalDistance) * 100;
+        progressBar.style.width = progressPercent + '%';
+        progressBus.style.left = progressPercent + '%';
+
+        // Checkpoints Collision
+        for (let cp of checkpoints) {
+            if (!cp.passed && distanceTraveled + bus.x >= cp.d) {
+                cp.passed = true;
+                triggerQuiz(cp);
+            }
+        }
+
+        // Coins (Zamzam) Collision
+        for (let c of coins) {
+            if (!c.collected) {
+                // Calculate distance between bus front and coin
+                let coinScreenX = c.d - distanceTraveled;
+                let roadYAtCoin = getRoadY(c.d);
+                let coinY = roadYAtCoin - c.yOffset;
+                
+                // Simple radius collision
+                if (Math.abs(coinScreenX - bus.x) < 50 && Math.abs(bus.y - coinY) < 60) {
+                    c.collected = true;
+                    score += 10;
+                    scoreVal.innerText = score;
+                }
+            }
+        }
+
+        // Calculate Bus Y and Rotation (Tilt based on road slope)
+        let frontY = getRoadY(distanceTraveled + bus.x + 20);
+        let backY = getRoadY(distanceTraveled + bus.x - 20);
+        
+        bus.y = getRoadY(distanceTraveled + bus.x) - 15; // 15 is offset for wheels
+        
+        // Calculate angle (arctan of dy/dx)
+        let dy = frontY - backY;
+        let dx = 40; // distance between front and back sample points
+        bus.angle = Math.atan2(dy, dx);
+    }
+
+    // Rendering
+    function draw() {
+        // Clear sky
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (gameState === 'START') return;
+
+        // Draw Scenery / Parallax Background
+        ctx.fillStyle = 'rgba(253, 224, 71, 0.5)'; // Distant sun/glow
+        ctx.beginPath(); ctx.arc(canvas.width - 100, 150, 60, 0, Math.PI*2); ctx.fill();
+
+        // Draw Mountains (Parallax - moves slower)
+        ctx.fillStyle = '#d4d4d8'; // Light gray mountains
+        for(let i=0; i<5; i++) {
+            let mX = (i * 400) - ((distanceTraveled * 0.2) % 400);
+            ctx.beginPath();
+            ctx.moveTo(mX, canvas.height);
+            ctx.lineTo(mX + 150, canvas.height * 0.4);
+            ctx.lineTo(mX + 300, canvas.height);
+            ctx.fill();
+        }
+
+        // Draw Road (Sand Hills)
+        ctx.fillStyle = '#fcd34d'; // Sand color
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height);
+        for (let x = 0; x <= canvas.width; x += 20) {
+            // Real world x is distanceTraveled + screen X
+            let realX = distanceTraveled + x;
+            ctx.lineTo(x, getRoadY(realX));
+        }
+        ctx.lineTo(canvas.width, canvas.height);
+        ctx.fill();
+
+        // Draw Road Top line
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        for (let x = 0; x <= canvas.width; x += 20) {
+            let realX = distanceTraveled + x;
+            if(x===0) ctx.moveTo(x, getRoadY(realX));
+            else ctx.lineTo(x, getRoadY(realX));
+        }
+        ctx.stroke();
+
+        // Draw Items (relative to distanceTraveled)
+        // 1. Coins (Zamzam)
+        ctx.font = '30px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (let c of coins) {
+            if (!c.collected) {
+                let screenX = c.d - distanceTraveled;
+                if (screenX > -50 && screenX < canvas.width + 50) {
+                    let y = getRoadY(c.d) - c.yOffset;
+                    ctx.fillText('💧', screenX, y);
+                }
+            }
+        }
+
+        // 2. Checkpoints (Signs)
+        for (let cp of checkpoints) {
+            let screenX = cp.d - distanceTraveled;
+            // Only draw if on screen
+            if (screenX > -100 && screenX < canvas.width + 100) {
+                let y = getRoadY(cp.d);
+                
+                // Draw Pole
+                ctx.fillStyle = '#78350f'; // Brown
+                ctx.fillRect(screenX - 5, y - 100, 10, 100);
+                
+                // Draw Sign Board
+                ctx.fillStyle = cp.passed ? '#22c55e' : '#f59e0b';
+                ctx.beginPath(); ctx.roundRect(screenX - 60, y - 140, 120, 50, 10); ctx.fill();
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke();
+                
+                // Draw Text & Icon
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 14px Arial';
+                ctx.fillText(cp.name, screenX, y - 125);
+                ctx.font = '20px Arial';
+                ctx.fillText(cp.icon, screenX, y - 155);
+            }
+        }
+
+        // Draw Goal (Ka'bah/Nabawi graphic at end)
+        let goalScreenX = totalDistance - distanceTraveled;
+        if(goalScreenX < canvas.width + 200) {
+            ctx.font = '100px Arial';
+            ctx.fillText('🕌', goalScreenX, getRoadY(totalDistance) - 50);
+        }
+
+        // Draw Bus
+        ctx.save();
+        ctx.translate(bus.x, bus.y);
+        ctx.rotate(bus.angle);
+        
+        // Using emoji for bus
+        ctx.font = '60px Arial';
+        ctx.textAlign = 'center';
+        // Adjust Y so the wheels sit on the road line
+        ctx.fillText('🚌', 0, 10); 
+        
+        ctx.restore();
+    }
+
+    // Main Loop
+    function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+    }
+
+    // Initialize
+    window.startGame = function() {
+        startScreen.classList.add('hidden');
+        document.getElementById('mobileControls').style.pointerEvents = 'auto'; // Enable controls
+        gameState = 'PLAY';
+    }
+
+    loop();
+
+</script>
+</body>
+</html>
+
